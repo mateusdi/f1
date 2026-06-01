@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>F1</title>
 
 <style>
@@ -10,6 +10,8 @@
     margin:0;
     padding:0;
     box-sizing:border-box;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 body{
@@ -21,6 +23,7 @@ body{
     justify-content: center;
     align-items: center;
     height: 100vh;
+    touch-action: none;
 }
 
 canvas{
@@ -57,6 +60,8 @@ canvas{
     z-index: 100;
     cursor: pointer;
     color: white;
+    text-align: center;
+    padding: 20px;
 }
 
 #start-screen h1 {
@@ -71,6 +76,38 @@ canvas{
     animation: piscar 1.5s infinite;
 }
 
+/* Controles Mobile */
+#mobile-controls {
+    display: none; /* Escondido por padrão no PC */
+    position: absolute;
+    bottom: 30px;
+    left: 0;
+    width: 100%;
+    justify-content: space-between;
+    padding: 0 30px;
+    z-index: 50;
+}
+
+.btn-control {
+    width: 80px;
+    height: 80px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(255, 255, 255, 0.6);
+    border-radius: 50%;
+    color: white;
+    font-size: 35px;
+    font-weight: bold;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+}
+
+.btn-control:active {
+    background: rgba(255, 215, 0, 0.4);
+    border-color: #FFD700;
+}
+
 @keyframes piscar {
     0% { opacity: 0.3; }
     50% { opacity: 1; }
@@ -82,7 +119,7 @@ canvas{
 
 <div id="start-screen">
     <h1>Jogo 3d 6k ULTRA FULL F1 2027 da Rafa <3 </h1>
-    <p>CLIQUE AQUI PARA COMEÇARMOS A NOSSA AVENTURA</p>
+    <p>TOQUE AQUI PARA COMEÇARMOS A NOSSA AVENTURA</p>
 </div>
 
 <div id="hud">
@@ -92,12 +129,18 @@ canvas{
 
 <canvas id="game"></canvas>
 
+<div id="mobile-controls" id="controls">
+    <div class="btn-control" id="btn-left">◀</div>
+    <div class="btn-control" id="btn-right">▶</div>
+</div>
+
 <script>
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 const hud = document.getElementById("hud");
 const startScreen = document.getElementById("start-screen");
+const mobileControls = document.getElementById("mobile-controls");
 
 canvas.width = 600;
 canvas.height = 800;
@@ -130,29 +173,39 @@ function updateHud(){
 updateHud();
 
 // ==========================
-// CONFIGURAÇÃO DOS ÁUDIOS (NATIVOS E SEGUROS)
+// CONFIGURAÇÃO DOS ÁUDIOS
 // ==========================
-// Carrega o arquivo local trator.mp3
 const bgMusic = new Audio("trator.mp3"); 
-bgMusic.loop = true;   // O HTML5 cuida do loop perfeitamente sem travar
-bgMusic.volume = 0.4;  // Volume ajustado para 40%
+bgMusic.loop = true;   
+bgMusic.volume = 0.4;  
 
 const milestoneAudio = new Audio("https://www.myinstants.com/media/sounds/max-verstappen.mp3");
 const gameOverAudio = new Audio("https://www.myinstants.com/media/sounds/hoje-sim-hoje-nao.mp3");
 
 // ==========================
-// INTERAÇÃO INICIAL (CLIQUE)
+// INTERAÇÃO INICIAL (CLIQUE / TOQUE)
 // ==========================
-startScreen.addEventListener("click", () => {
+function startGame() {
+    if (gameStarted) return;
     startScreen.style.display = "none";
     gameStarted = true;
 
-    // Dá o play no trator sem risco de bloqueio de segurança
+    // Detecta se é dispositivo móvel para exibir os botões
+    if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+        mobileControls.style.display = "flex";
+    }
+
     bgMusic.play().catch(err => console.log("Erro ao tocar áudio:", err));
+}
+
+startScreen.addEventListener("click", startGame);
+startScreen.addEventListener("touchstart", (e) => {
+    e.preventDefault();
+    startGame();
 });
 
 // ==========================
-// CONTROLES
+// CONTROLES (TECLADO PC)
 // ==========================
 document.addEventListener("keydown",(e)=>{
     keys[e.key] = true;
@@ -161,6 +214,28 @@ document.addEventListener("keydown",(e)=>{
 document.addEventListener("keyup",(e)=>{
     keys[e.key] = false;
 });
+
+// ==========================
+// CONTROLES (TOQUE MOBILE)
+// ==========================
+const btnLeft = document.getElementById("btn-left");
+const btnRight = document.getElementById("btn-right");
+
+// Eventos da Esquerda
+btnLeft.addEventListener("touchstart", (e) => { e.preventDefault(); keys["ArrowLeft"] = true; });
+btnLeft.addEventListener("touchend", (e) => { e.preventDefault(); keys["ArrowLeft"] = false; });
+
+// Eventos da Direita
+btnRight.addEventListener("touchstart", (e) => { e.preventDefault(); keys["ArrowRight"] = true; });
+btnRight.addEventListener("touchend", (e) => { e.preventDefault(); keys["ArrowRight"] = false; });
+
+// Suporte para reiniciar tocando na tela após Game Over
+ canvas.addEventListener("touchstart", (e) => {
+    if (gameOver) {
+        e.preventDefault();
+        location.reload();
+    }
+ });
 
 // ==========================
 // PISTA
@@ -267,7 +342,6 @@ function update(){
         if(collision(player, enemy)){
             gameOver = true;
             
-            // Para o som do trator na hora da batida
             bgMusic.pause();
 
             gameOverAudio.currentTime = 0;
@@ -310,6 +384,8 @@ function render(){
     }
 
     if(gameOver){
+        mobileControls.style.display = "none"; // Esconde setas no game over
+
         ctx.fillStyle="rgba(0,0,0,0.85)";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -326,7 +402,12 @@ function render(){
         
         ctx.font="20px Arial";
         ctx.fillStyle="#aaa";
-        ctx.fillText("Pressione F5 para reiniciar", canvas.width/2, canvas.height/2 + 80);
+        // Texto adaptável para PC ou Celular
+        if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+            ctx.fillText("Toque na tela para reiniciar", canvas.width/2, canvas.height/2 + 80);
+        } else {
+            ctx.fillText("Pressione F5 para reiniciar", canvas.width/2, canvas.height/2 + 80);
+        }
     }
 }
 
