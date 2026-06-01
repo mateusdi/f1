@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>F1</title>
+
+<style>
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+body{
+    overflow:hidden;
+    background: linear-gradient(rgba(0,0,0,0.85), rgba(0,0,0,0.85)), url('max.png') no-repeat center center fixed;
+    background-size: cover;
+    font-family:Arial,sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    touch-action: none;
+}
+
+canvas{
+    display:block;
+    max-width: 100vw;
+    max-height: 100vh;
+    box-shadow: 0 0 30px rgba(255, 215, 0, 0.2);
+    background: transparent;
+}
+
+#hud{
+    position:absolute;
+    top:15px;
+    left:15px;
+    color:white;
+    font-size:22px;
+    font-weight:bold;
+    text-shadow:2px 2px 4px #000;
+    z-index:10;
+    pointer-events: none;
+}
+
+#start-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.9);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 100;
+    cursor: pointer;
+    color: white;
+    text-align: center;
+    padding: 20px;
+}
+
+#start-screen h1 {
+    font-size: 45px;
+    color: #FFD700;
+    margin-bottom: 20px;
+    text-shadow: 0 0 10px rgba(255,215,0,0.5);
+}
+
+#start-screen p {
+    font-size: 20px;
+    animation: piscar 1.5s infinite;
+}
+
+/* Controles Mobile */
+#mobile-controls {
+    display: none; 
+    position: absolute;
+    bottom: 30px;
+    left: 0;
+    width: 100%;
+    justify-content: space-between;
+    padding: 0 30px;
+    z-index: 50;
+}
+
+.btn-control {
+    width: 80px;
+    height: 80px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(255, 255, 255, 0.6);
+    border-radius: 50%;
+    color: white;
+    font-size: 35px;
+    font-weight: bold;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+}
+
+.btn-control:active {
+    background: rgba(255, 215, 0, 0.4);
+    border-color: #FFD700;
+}
+
+@keyframes piscar {
+    0% { opacity: 0.3; }
+    50% { opacity: 1; }
+    100% { opacity: 0.3; }
+}
+</style>
+</head>
+<body>
+
+<div id="start-screen">
+    <h1>Jogo 3d 6k ULTRA FULL F1 2027 da Rafa <3 </h1>
+    <p>TOQUE AQUI PARA COMEÇARMOS A NOSSA AVENTURA</p>
+</div>
+
+<div id="hud">
+    Pontos: 0<br>
+    Velocidade: 4.0
+</div>
+
+<canvas id="game"></canvas>
+
+<div id="mobile-controls">
+    <div class="btn-control" id="btn-left">◀</div>
+    <div class="btn-control" id="btn-right">▶</div>
+</div>
+
+<script>
+
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+const hud = document.getElementById("hud");
+const startScreen = document.getElementById("start-screen");
+const mobileControls = document.getElementById("mobile-controls");
+
+canvas.width = 600;
+canvas.height = 800;
+
+const keys = {};
+const enemies = [];
+
+let score = 0;
+let gameOver = false;
+let gameWon = false; // NOVA VARIÁVEL: Controla o estado de vitória
+let gameStarted = false; 
+
+const WIN_SCORE = 100; // PONTUAÇÃO PARA GANHAR O JOGO (Altere aqui se quiser)
+
+let enemySpeed = 4.0;
+let roadSpeed = 8.0;
+
+const ROAD_WIDTH = 420;
+const roadX = (canvas.width - ROAD_WIDTH) / 2;
+
+const player = {
+    w: 60,
+    h: 110,
+    speed: 9,
+    x: canvas.width / 2 - 30,
+    y: canvas.height - 160
+};
+
+function updateHud(){
+    hud.innerHTML = `Pontos: ${score}<br>Velocidade: ${enemySpeed.toFixed(1)}`;
+}
+
+updateHud();
+
+// ==========================
+// CONFIGURAÇÃO DOS ÁUDIOS
+// ==========================
+const bgMusic = new Audio("trator.mp3"); 
+bgMusic.loop = true;   
+bgMusic.volume = 0.4;  
+
+const milestoneAudio = new Audio("https://www.myinstants.com/media/sounds/max-verstappen.mp3");
+const gameOverAudio = new Audio("https://www.myinstants.com/media/sounds/hoje-sim-hoje-nao.mp3");
+
+// ==========================
+// INTERAÇÃO INICIAL (CLIQUE / TOQUE)
+// ==========================
+function startGame() {
+    if (gameStarted) return;
+    startScreen.style.display = "none";
+    gameStarted = true;
+
+    if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+        mobileControls.style.display = "flex";
+    }
+
+    bgMusic.play().catch(err => console.log("Erro ao tocar áudio:", err));
+}
+
+startScreen.addEventListener("click", startGame);
+startScreen.addEventListener("touchstart", (e) => {
+    e.preventDefault();
+    startGame();
+});
+
+// ==========================
+// CONTROLES (TECLADO PC)
+// ==========================
+document.addEventListener("keydown",(e)=>{
+    keys[e.key] = true;
+});
+
+document.addEventListener("keyup",(e)=>{
+    keys[e.key] = false;
+});
+
+// ==========================
+// CONTROLES (TOQUE MOBILE)
+// ==========================
+const btnLeft = document.getElementById("btn-left");
+const btnRight = document.getElementById("btn-right");
+
+btnLeft.addEventListener("touchstart", (e) => { e.preventDefault(); keys["ArrowLeft"] = true; });
+btnLeft.addEventListener("touchend", (e) => { e.preventDefault(); keys["ArrowLeft"] = false; });
+
+btnRight.addEventListener("touchstart", (e) => { e.preventDefault(); keys["ArrowRight"] = true; });
+btnRight.addEventListener("touchend", (e) => { e.preventDefault(); keys["ArrowRight"] = false; });
+
+// Reiniciar tocando na tela após Game Over ou Victory
+canvas.addEventListener("touchstart", (e) => {
+    if (gameOver || gameWon) {
+        e.preventDefault();
+        location.reload();
+    }
+});
+
+// ==========================
+// PISTA
+// ==========================
+const roadLines = [];
+for(let i=0; i<20; i++){
+    roadLines.push({ y: i * 50 });
+}
+
+// ==========================
+// INIMIGOS
+// ==========================
+function spawnEnemy(){
+    if(!gameStarted || gameOver || gameWon) return;
+    const minX = roadX + 30;
+    const maxX = roadX + ROAD_WIDTH - 90;
+
+    enemies.push({
+        x: minX + Math.random() * (maxX - minX),
+        y: -120, 
+        w: 60,
+        h: 110,
+        speed: enemySpeed,
+        passed: false 
+    });
+}
+
+let spawnInterval = setInterval(spawnEnemy, 1400);
+
+// ==========================
+// RENDERIZAÇÃO PISTA
+// ==========================
+function drawRoad(){
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    ctx.fillStyle="#444";
+    ctx.fillRect(roadX, 0, ROAD_WIDTH, canvas.height);
+
+    ctx.fillStyle="#FFD700";
+    ctx.fillRect(roadX, 0, 6, canvas.height);
+    ctx.fillRect(roadX + ROAD_WIDTH - 6, 0, 6, canvas.height);
+
+    ctx.fillStyle="white";
+    for(const line of roadLines){
+        ctx.fillRect(canvas.width/2 - 5, line.y, 10, 35);
+
+        if(gameStarted && !gameOver && !gameWon) {
+            line.y += roadSpeed;
+        }
+
+        if(line.y > canvas.height){
+            line.y = -35;
+        }
+    }
+}
+
+function drawCar(x,y,color){
+    ctx.fillStyle=color;
+    ctx.fillRect(x+12,y,36,70);
+    ctx.fillRect(x,y+20,60,50);
+
+    ctx.fillStyle="#111";
+    ctx.fillRect(x-5,y+15,10,25);
+    ctx.fillRect(x+55,y+15,10,25);
+    ctx.fillRect(x-5,y+70,10,25);
+    ctx.fillRect(x+55,y+70,10,25);
+
+    ctx.fillStyle="#ccc";
+    ctx.fillRect(x+15,y+10,30,15);
+}
+
+// ==========================
+// LÓGICA DO JOGO E COLISÕES
+// ==========================
+function collision(a,b){
+    return (
+        a.x < b.x+b.w &&
+        a.x+a.w > b.x &&
+        a.y < b.y+b.h &&
+        a.y+a.h > b.y
+    );
+}
+
+function update(){
+    if(!gameStarted || gameOver || gameWon) return;
+
+    if(keys["ArrowLeft"] || keys["a"] || keys["A"]){
+        player.x -= player.speed;
+    }
+    if(keys["ArrowRight"] || keys["d"] || keys["D"]){
+        player.x += player.speed;
+    }
+
+    const leftLimit = roadX + 6;
+    const rightLimit = roadX + ROAD_WIDTH - player.w - 6;
+
+    if(player.x < leftLimit) player.x = leftLimit;
+    if(player.x > rightLimit) player.x = rightLimit;
+
+    for(let i=enemies.length-1; i>=0; i--){
+        const enemy = enemies[i];
+        enemy.y += enemy.speed;
+
+        if(collision(player, enemy)){
+            gameOver = true;
+            bgMusic.pause();
+            gameOverAudio.currentTime = 0;
+            gameOverAudio.play().catch(()=>{});
+            return;
+        }
+
+        if(!enemy.passed && enemy.y > player.y + player.h){
+            enemy.passed = true;
+            score++;
+
+            // VERIFICA SE ALCANÇOU A PONTUAÇÃO MÁXIMA PARA GANHAR
+            if(score >= WIN_SCORE){
+                gameWon = true;
+                bgMusic.pause();
+                milestoneAudio.currentTime = 0;
+                milestoneAudio.play().catch(()=>{});
+                return;
+            }
+
+            if(score % 15 === 0){
+                milestoneAudio.currentTime = 0;
+                milestoneAudio.play().catch(()=>{});
+            }
+
+            if(score % 5 === 0){
+                enemySpeed += 0.7; 
+                roadSpeed += 0.6;
+                enemies.forEach(e => { e.speed = enemySpeed; });
+            }
+
+            updateHud();
+        }
+
+        if(enemy.y > canvas.height + 100){
+            enemies.splice(i, 1);
+        }
+    }
+}
+
+function render(){
+    drawRoad();
+    drawCar(player.x, player.y, "#ff0000");
+
+    for(const enemy of enemies){
+        drawCar(enemy.x, enemy.y, "#00d4ff");
+    }
+
+    // TELA DE GAME OVER
+    if(gameOver){
+        mobileControls.style.display = "none";
+        ctx.fillStyle="rgba(0,0,0,0.85)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle="white";
+        ctx.textAlign="center";
+
+        ctx.fillStyle="#ff3333";
+        ctx.font="bold 50px Arial";
+        ctx.fillText("GAME OVER", canvas.width/2, canvas.height/2 - 40);
+
+        ctx.fillStyle="white";
+        ctx.font="30px Arial";
+        ctx.fillText("Pontuação: " + score, canvas.width/2, canvas.height/2 + 20);
+        
+        ctx.font="20px Arial";
+        ctx.fillStyle="#aaa";
+        if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+            ctx.fillText("Toque na tela para reiniciar", canvas.width/2, canvas.height/2 + 80);
+        } else {
+            ctx.fillText("Pressione F5 para reiniciar", canvas.width/2, canvas.height/2 + 80);
+        }
+    }
+
+    // NOVA TELA DE VITÓRIA
+    if(gameWon){
+        mobileControls.style.display = "none";
+        ctx.fillStyle="rgba(0,0,0,0.85)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.textAlign="center";
+
+        ctx.fillStyle="#FFD700"; // Dourado do troféu
+        ctx.font="bold 40px Arial";
+        ctx.fillText("🏆 VOCÊ VENCEU! 🏆", canvas.width/2, canvas.height/2 - 50);
+        
+        ctx.fillStyle="#fff";
+        ctx.font="24px Arial";
+        ctx.fillText("Rafa é a Campeã Mundial de 2027!", canvas.width/2, canvas.height/2 + 10);
+        ctx.font="20px Arial";
+        ctx.fillText("Pontuação Máxima atingida: " + WIN_SCORE, canvas.width/2, canvas.height/2 + 50);
+
+        ctx.font="18px Arial";
+        ctx.fillStyle="#aaa";
+        if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+            ctx.fillText("Toque na tela para correr de novo", canvas.width/2, canvas.height/2 + 110);
+        } else {
+            ctx.fillText("Pressione F5 para correr de novo", canvas.width/2, canvas.height/2 + 110);
+        }
+    }
+}
+
+function gameLoop(){
+    update();
+    render();
+    requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+
+</script>
+</body>
+</html>
