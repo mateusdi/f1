@@ -78,7 +78,7 @@ canvas{
 
 /* Controles Mobile */
 #mobile-controls {
-    display: none; /* Escondido por padrão no PC */
+    display: none; 
     position: absolute;
     bottom: 30px;
     left: 0;
@@ -129,7 +129,7 @@ canvas{
 
 <canvas id="game"></canvas>
 
-<div id="mobile-controls" id="controls">
+<div id="mobile-controls">
     <div class="btn-control" id="btn-left">◀</div>
     <div class="btn-control" id="btn-right">▶</div>
 </div>
@@ -150,7 +150,10 @@ const enemies = [];
 
 let score = 0;
 let gameOver = false;
+let gameWon = false; // NOVA VARIÁVEL: Controla o estado de vitória
 let gameStarted = false; 
+
+const WIN_SCORE = 40; // PONTUAÇÃO PARA GANHAR O JOGO (Altere aqui se quiser)
 
 let enemySpeed = 4.0;
 let roadSpeed = 8.0;
@@ -190,7 +193,6 @@ function startGame() {
     startScreen.style.display = "none";
     gameStarted = true;
 
-    // Detecta se é dispositivo móvel para exibir os botões
     if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
         mobileControls.style.display = "flex";
     }
@@ -221,21 +223,19 @@ document.addEventListener("keyup",(e)=>{
 const btnLeft = document.getElementById("btn-left");
 const btnRight = document.getElementById("btn-right");
 
-// Eventos da Esquerda
 btnLeft.addEventListener("touchstart", (e) => { e.preventDefault(); keys["ArrowLeft"] = true; });
 btnLeft.addEventListener("touchend", (e) => { e.preventDefault(); keys["ArrowLeft"] = false; });
 
-// Eventos da Direita
 btnRight.addEventListener("touchstart", (e) => { e.preventDefault(); keys["ArrowRight"] = true; });
 btnRight.addEventListener("touchend", (e) => { e.preventDefault(); keys["ArrowRight"] = false; });
 
-// Suporte para reiniciar tocando na tela após Game Over
- canvas.addEventListener("touchstart", (e) => {
-    if (gameOver) {
+// Reiniciar tocando na tela após Game Over ou Victory
+canvas.addEventListener("touchstart", (e) => {
+    if (gameOver || gameWon) {
         e.preventDefault();
         location.reload();
     }
- });
+});
 
 // ==========================
 // PISTA
@@ -249,7 +249,7 @@ for(let i=0; i<20; i++){
 // INIMIGOS
 // ==========================
 function spawnEnemy(){
-    if(!gameStarted || gameOver) return;
+    if(!gameStarted || gameOver || gameWon) return;
     const minX = roadX + 30;
     const maxX = roadX + ROAD_WIDTH - 90;
 
@@ -266,7 +266,7 @@ function spawnEnemy(){
 let spawnInterval = setInterval(spawnEnemy, 1400);
 
 // ==========================
-// RENDERIZAÇÃO
+// RENDERIZAÇÃO PISTA
 // ==========================
 function drawRoad(){
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -282,7 +282,7 @@ function drawRoad(){
     for(const line of roadLines){
         ctx.fillRect(canvas.width/2 - 5, line.y, 10, 35);
 
-        if(gameStarted && !gameOver) {
+        if(gameStarted && !gameOver && !gameWon) {
             line.y += roadSpeed;
         }
 
@@ -320,7 +320,7 @@ function collision(a,b){
 }
 
 function update(){
-    if(!gameStarted || gameOver) return;
+    if(!gameStarted || gameOver || gameWon) return;
 
     if(keys["ArrowLeft"] || keys["a"] || keys["A"]){
         player.x -= player.speed;
@@ -341,9 +341,7 @@ function update(){
 
         if(collision(player, enemy)){
             gameOver = true;
-            
             bgMusic.pause();
-
             gameOverAudio.currentTime = 0;
             gameOverAudio.play().catch(()=>{});
             return;
@@ -353,6 +351,15 @@ function update(){
             enemy.passed = true;
             score++;
 
+            // VERIFICA SE ALCANÇOU A PONTUAÇÃO MÁXIMA PARA GANHAR
+            if(score >= WIN_SCORE){
+                gameWon = true;
+                bgMusic.pause();
+                milestoneAudio.currentTime = 0;
+                milestoneAudio.play().catch(()=>{});
+                return;
+            }
+
             if(score % 15 === 0){
                 milestoneAudio.currentTime = 0;
                 milestoneAudio.play().catch(()=>{});
@@ -361,7 +368,6 @@ function update(){
             if(score % 5 === 0){
                 enemySpeed += 0.7; 
                 roadSpeed += 0.6;
-                
                 enemies.forEach(e => { e.speed = enemySpeed; });
             }
 
@@ -376,19 +382,17 @@ function update(){
 
 function render(){
     drawRoad();
-
     drawCar(player.x, player.y, "#ff0000");
 
     for(const enemy of enemies){
         drawCar(enemy.x, enemy.y, "#00d4ff");
     }
 
+    // TELA DE GAME OVER
     if(gameOver){
-        mobileControls.style.display = "none"; // Esconde setas no game over
-
+        mobileControls.style.display = "none";
         ctx.fillStyle="rgba(0,0,0,0.85)";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-
         ctx.fillStyle="white";
         ctx.textAlign="center";
 
@@ -402,11 +406,36 @@ function render(){
         
         ctx.font="20px Arial";
         ctx.fillStyle="#aaa";
-        // Texto adaptável para PC ou Celular
         if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
             ctx.fillText("Toque na tela para reiniciar", canvas.width/2, canvas.height/2 + 80);
         } else {
             ctx.fillText("Pressione F5 para reiniciar", canvas.width/2, canvas.height/2 + 80);
+        }
+    }
+
+    // NOVA TELA DE VITÓRIA
+    if(gameWon){
+        mobileControls.style.display = "none";
+        ctx.fillStyle="rgba(0,0,0,0.85)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.textAlign="center";
+
+        ctx.fillStyle="#FFD700"; // Dourado do troféu
+        ctx.font="bold 40px Arial";
+        ctx.fillText("🏆 VOCÊ VENCEU! 🏆", canvas.width/2, canvas.height/2 - 50);
+        
+        ctx.fillStyle="#fff";
+        ctx.font="24px Arial";
+        ctx.fillText("Rafa é a Campeã Mundial de 2027!", canvas.width/2, canvas.height/2 + 10);
+        ctx.font="20px Arial";
+        ctx.fillText("Pontuação Máxima atingida: " + WIN_SCORE, canvas.width/2, canvas.height/2 + 50);
+
+        ctx.font="18px Arial";
+        ctx.fillStyle="#aaa";
+        if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+            ctx.fillText("Toque na tela para correr de novo", canvas.width/2, canvas.height/2 + 110);
+        } else {
+            ctx.fillText("Pressione F5 para correr de novo", canvas.width/2, canvas.height/2 + 110);
         }
     }
 }
